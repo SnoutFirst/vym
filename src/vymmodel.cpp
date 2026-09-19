@@ -155,6 +155,13 @@ VymModel::~VymModel()
 
 void VymModel::clear()
 {
+    // Focus mode is a property of the map, not of its content: Leave it,
+    // e.g. when another map is loaded into this model
+    if (!focusBranchUuidInt.isNull()) {
+        focusBranchUuidInt = QUuid();
+        emit focusChanged();
+    }
+
     while (rootItem->childCount() > 0) {
         // qDebug()<<"VM::clear  ri="<<rootItem<<"
         // ri->count()="<<rootItem->childCount();
@@ -222,6 +229,9 @@ void VymModel::init()
     hasContextPos = false;
 
     hideMode = TreeItem::HideNone;
+
+    focusBranchUuidInt = QUuid();
+    exportFocusUuidInt = QUuid();
 
     // Animation in MapEditor
     viewZoomFactorInt = 1;
@@ -739,6 +749,9 @@ bool VymModel::loadMap(QString fname, const File::LoadMode &lmode,
 
     // Restore original zip state
     zipped = zipped_org;
+
+    // Parts of the map may have been replaced or added
+    updateFocus();
 
     updateActions();
 
@@ -4463,6 +4476,12 @@ BranchItem *VymModel::addMapCenterAtPos(QPointF absPos, bool interactive)
     }
 
     reposition();
+
+    // New MapCenters start visible, hide them, if they are outside the
+    // focused subtree
+    if (!isLoadingInt)
+        updateFocus();
+
     return newbi;
 }
 
@@ -4512,6 +4531,11 @@ BranchItem *VymModel::addNewBranchInt(BranchItem *dst, int pos)
 
     // Reposition now for correct position of e.g. LineEdit later and upLink
     reposition();
+
+    // New branches start visible, hide them, if they are outside the focused
+    // subtree. While loading a map, this is done once at the end of loadMap()
+    if (!isLoadingInt)
+        updateFocus();
 
     return newbi;
 }
@@ -4798,6 +4822,9 @@ bool VymModel::relinkBranches(QList <BranchItem*> branches, BranchItem *dst, int
             }
         } // saveState not blocked
     }   // Iterating over selbis    
+
+    // Branches may have been moved in or out of the focused subtree
+    updateFocus();
 
     reposition();
 
@@ -5114,6 +5141,8 @@ void VymModel::deleteChildren(BranchItem *bi)
 {
     QList<BranchItem *> selbis = getSelectedBranches(bi);
     foreach (BranchItem *selbi, selbis) {
+        checkFocusOnDelete(selbi);
+
         QString bv = setBranchVar(selbi);
         QString uc = bv + "map.loadBranchReplace(\"UNDO_PATH\", b);";
         QString rc = bv + "b.removeChildren();";
@@ -5143,6 +5172,8 @@ void VymModel::deleteChildrenBranches(BranchItem *bi)
     QList<BranchItem *> selbis = getSelectedBranches(bi);
     foreach (BranchItem *selbi, selbis) {
         if (selbi->branchCount() > 0) {
+            checkFocusOnDelete(selbi);
+
             int n_first = selbi->getFirstBranch()->row();
             int n_last  = selbi->getLastBranch()->row();
 
@@ -5175,6 +5206,8 @@ void VymModel::deleteChildrenBranches(BranchItem *bi)
 TreeItem *VymModel::deleteItem(TreeItem *ti)
 {
     if (ti) {
+        checkFocusOnDelete(ti);
+
         TreeItem *pi = ti->parent();
 
         bool wasAttribute = ti->hasTypeAttribute();
@@ -5374,6 +5407,134 @@ void VymModel::unscrollSubtree(BranchItem *bi)
         mapEditor->stopContainerAnimations();
 
     reposition();
+}
+
+void VymModel::applyFocusMode()
+{
+    BranchItem *focusBi = getFocusBranch();
+
+    // Mark the path from the focused branch up to its MapCenter: These
+    // ancestors stay visible for orientation, too
+    QList<BranchItem *> path;
+    for (BranchItem *bi = focusBi; bi && bi != rootItem; bi = bi->parentBranch()) {
+        bi->setFocusOnPath(true);
+        path.append(bi);
+    }
+
+    // Let all branches check, if they are the focused one or inside its subtree
+    for (int i = 0; i < rootItem->branchCount(); i++)
+        rootItem->getBranchNum(i)->setFocusMode(focusBi);
+
+    foreach (BranchItem *bi, path)
+        bi->setFocusOnPath(false);
+}
+
+void VymModel::setFocusBranch(BranchItem *bi)
+{
+    QUuid uuid = bi ? bi->getUuid() : QUuid();
+
+    if (uuid == focusBranchUuidInt)
+        return;
+
+    // Only the UUID is stored, the branch itself is looked up when needed.
+    // So deleting or replacing parts of the map can not leave a dangling pointer.
+    focusBranchUuidInt = uuid;
+
+    applyFocusMode();
+
+    if (mapEditor)
+        mapEditor->stopContainerAnimations();
+
+    reposition();
+
+    if (mainWindow) {
+        if (bi)
+            mainWindow->statusMessage(
+                tr("Focus mode: \"%1\", its ancestors and its children are shown",
+                   "Status message when entering focus mode")
+                    .arg(bi->headingPlain()));
+        else
+            mainWindow->statusMessage(
+                tr("Focus mode: off",
+                   "Status message when leaving focus mode"));
+    }
+
+    if (bi && mapEditor) {
+        // Bring the focused branch into the center of the view,
+        // but keep zoom and rotation as they are
+        BranchContainer *bc = bi->getBranchContainer();
+        if (bc) {
+            Container *hc = bc->getHeadingContainer();
+            if (hc)
+                mapEditor->setViewCenterTarget(hc->mapToScene(hc->rect().center()));
+        }
+    }
+
+    // Enable or disable the "Focus branch" action and update its checked state
+    updateActions();
+
+    emit focusChanged();
+}
+
+void VymModel::toggleFocus()
+{
+    BranchItem *selbi = getSelectedBranch();
+
+    if (selbi && selbi != getFocusBranch())
+        // Enter focus mode or move focus to newly selected branch
+        setFocusBranch(selbi);
+    else
+        // Focus the same branch again or no branch selected:
+        // Leave focus mode
+        setFocusBranch(nullptr);
+}
+
+BranchItem *VymModel::getFocusBranch()
+{
+    if (focusBranchUuidInt.isNull())
+        return nullptr;
+
+    TreeItem *ti = findUuid(focusBranchUuidInt);
+    if (ti && ti->hasTypeBranch())
+        return static_cast<BranchItem *>(ti);
+
+    return nullptr;
+}
+
+void VymModel::updateFocus()
+{
+    if (focusBranchUuidInt.isNull())
+        return;
+
+    if (!getFocusBranch()) {
+        // The focused branch has been removed, e.g. when replacing a subtree
+        setFocusBranch(nullptr);
+        return;
+    }
+
+    applyFocusMode();
+
+    if (mapEditor) {
+        mapEditor->stopContainerAnimations();
+        mapEditor->updateFocusIndicator();
+    }
+
+    reposition();
+}
+
+void VymModel::checkFocusOnDelete(TreeItem *ti)
+{
+    if (focusBranchUuidInt.isNull() || !ti)
+        return;
+
+    if (focusBranchUuidInt == ti->getUuid()) {
+        setFocusBranch(nullptr);
+        return;
+    }
+
+    TreeItem *fbi = findUuid(focusBranchUuidInt);
+    if (fbi && fbi->isChildOf(ti))
+        setFocusBranch(nullptr);
 }
 
 void VymModel::emitExpandAll() { emit expandAll(); }
@@ -6090,10 +6251,28 @@ void VymModel::setExportMode(bool b)
 {
     // should be called before and after exports
     // depending on the settings
+
+    if (b) {
+        // Focus mode is a temporary view mode in the MapEditor, but exports
+        // should never silently miss parts of the map: Leave focus mode
+        // temporarily and restore it afterwards.
+        exportFocusUuidInt = focusBranchUuidInt;
+        if (!exportFocusUuidInt.isNull())
+            setFocusBranch(nullptr);
+    }
+
     if (b && settings.value("/export/useHideExport", "true") == "true")
         setHideTmpMode(TreeItem::HideExport);
     else
         setHideTmpMode(TreeItem::HideNone);
+
+    if (!b && !exportFocusUuidInt.isNull()) {
+        // Resume focus mode, which was interrupted by the export
+        TreeItem *ti = findUuid(exportFocusUuidInt);
+        exportFocusUuidInt = QUuid();
+        if (ti && ti->hasTypeBranch())
+            setFocusBranch(static_cast<BranchItem *>(ti));
+    }
 }
 
 QPointF VymModel::exportImage(QString fname, bool askName, QString format)
@@ -7571,6 +7750,13 @@ void VymModel::updateSelection(QItemSelection newsel, QItemSelection dsel)
 
     if (do_reposition)
         reposition();
+
+    // In focus mode the focused branch follows the selection
+    if (!focusBranchUuidInt.isNull()) {
+        BranchItem *selbi = getSelectedBranch();
+        if (selbi && selbi->isFocusHidden())
+            setFocusBranch(selbi);
+    }
 }
 
 void VymModel::setSelectionModel(QItemSelectionModel *sm) { selModel = sm; }

@@ -37,6 +37,8 @@ class BranchItem : public MapItem {
   protected:
     bool scrolled;      // true if all children are scrolled and thus invisible
     bool tmpUnscrolled; // can only be true (temporary) for a scrolled subtree
+    bool focusHiddenInt; //! Hidden, because another branch is focused in focus mode
+    bool focusOnPathInt; //! Ancestor of the focused branch (temporary during update)
 
   public:
     void updateTaskFlag();
@@ -89,6 +91,14 @@ class BranchItem : public MapItem {
 
 
     void setHideMode(HideTmpMode mode); 
+    /*! Hide this branch and its children, if they are neither the focused
+        branch \a focusBi, nor one of its children or one of its ancestors.
+        Set \a focusBi to nullptr to leave focus mode and show everything again.
+        \a insideFocus is \c true, if the parent is the focused branch or one
+        of its children and tells the recursion that everything stays visible. */
+    void setFocusMode(BranchItem *focusBi, bool insideFocus = false);
+    void setFocusOnPath(bool b); //!< Mark ancestor of focused branch (temporary)
+    bool isFocusHidden();        //!< Hidden, because another branch is focused
     void updateVisuals();
 
     BranchContainer *createBranchContainer(

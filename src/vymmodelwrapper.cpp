@@ -323,6 +323,14 @@ QString VymModelWrapper::getAuthor()
     return r;
 }
 
+QString VymModelWrapper::getFocus()
+{
+    BranchItem *bi = modelInt->getFocusBranch();
+    QString r = bi ? bi->headingPlain() : QString();
+    mainWindow->setScriptResult(r);
+    return r;
+}
+
 QString VymModelWrapper::getComment()
 {
     QString r = modelInt->mapComment();
@@ -630,6 +638,13 @@ void VymModelWrapper::setAnimDuration(int n)
 
 void VymModelWrapper::setAuthor(const QString &s) { modelInt->setMapAuthor(s); }
 
+void VymModelWrapper::setFocus()
+{
+    BranchItem *bi = modelInt->getSelectedBranch();
+    if (bi)
+        modelInt->setFocusBranch(bi);
+}
+
 void VymModelWrapper::setBackgroundColor(const QString &color)
 {
     QColor col(color);
@@ -730,6 +745,8 @@ int VymModelWrapper::slideCount()
 void VymModelWrapper::undo() { modelInt->undo(); }
 
 void VymModelWrapper::unselectAll() { modelInt->unselectAll(); }
+
+void VymModelWrapper::unsetFocus() { modelInt->setFocusBranch(); }
 
 void VymModelWrapper::unsetBackgroundImage()
 {

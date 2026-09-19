@@ -31,6 +31,9 @@ BranchItem::BranchItem(TreeItem *parent)
     scrolled = false;
     tmpUnscrolled = false;
 
+    focusHiddenInt = false;
+    focusOnPathInt = false;
+
     lastSelectedBranchNum = 0;
     lastSelectedBranchNumAlt = 0;
 
@@ -487,6 +490,30 @@ void BranchItem::setHideMode(HideTmpMode mode)
     TreeItem::setHideMode(mode);
     branchContainer->updateVisibility();
 }
+
+void BranchItem::setFocusMode(BranchItem *focusBi, bool insideFocus)
+{
+    // In focus mode only the focused branch, its children and its ancestors
+    // are shown, all other branches are hidden. The map data is not changed.
+    //
+    // The ancestors of focusBi are marked beforehand by
+    // VymModel::applyFocusMode(), the state "I am the focused branch or one
+    // of its children" is passed down the recursion. So every branch is
+    // visited exactly once, which keeps this linear in the number of branches.
+    bool inside = insideFocus || (focusBi && this == focusBi);
+    focusHiddenInt = focusBi && !inside && !focusOnPathInt;
+
+    for (int i = 0; i < branchCount(); ++i)
+        getBranchNum(i)->setFocusMode(focusBi, inside);
+
+    // Hiding a branch hides its images and child branches, too
+    if (branchContainer)
+        branchContainer->updateVisibility();
+}
+
+void BranchItem::setFocusOnPath(bool b) { focusOnPathInt = b; }
+
+bool BranchItem::isFocusHidden() { return focusHiddenInt; }
 
 void BranchItem::updateVisuals()
 {

@@ -88,7 +88,14 @@ Thanks for using vym!
 Uwe Drechsel - July 2026
 
 ## Unreleased
+### Features
+ * Focus mode shows an overlay in the upper left corner of the MapEditor with the focused branch, including a button to leave focus mode again
+ * Scripting: `Map::setFocus()`, `Map::unsetFocus()` and `Map::getFocus()` to control focus mode
+
 ### Bugfixes
+ * Focus mode: Exports no longer silently miss the branches hidden by an active focus mode; the focus is restored after exporting
+ * Focus mode: The focused branch is remembered by its UUID, so deleting, relinking or undoing it can not leave a dangling pointer behind anymore; if the focused branch is gone, focus mode ends
+ * Focus mode: Focus mode is restored after a map is reloaded and new branches are hidden correctly
  * [#150](https://github.com/insilmaril/vym/issues/150) No more redundant overwrite confirmation on macOS when saving a map, saving an image or exporting; the manual confirmation is kept on Windows and Linux
  * [#174](https://github.com/insilmaril/vym/issues/174) Tasks now visible in a new map created from a command-line filename (TaskEditor map filter was left stale)
  * [#218](https://github.com/insilmaril/vym/issues/218) Scroll/unscroll of a branch while it is animated no longer breaks its positioning

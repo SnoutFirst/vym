@@ -10,6 +10,8 @@
 #include "settings.h"
 #include "vymmodel.h"
 
+class QLabel;
+
 class XLink;
 class XLinkItem;
 class Winter;
@@ -287,5 +289,12 @@ class MapEditor : public QGraphicsView {
   public slots:
     void updateData(const QModelIndex &);                 // update data
     void togglePresentationMode();
+
+    void updateFocusIndicator(); //!< Show or hide overlay for focus mode
+    void leaveFocusMode();       //!< Leave focus mode (button in the overlay)
+
+  private:
+    QWidget *focusIndicator;    //!< Overlay shown while focus mode is active
+    QLabel *focusIndicatorLabel; //!< Branch heading shown in the overlay
 };
 #endif

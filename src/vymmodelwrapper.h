@@ -40,6 +40,7 @@ class VymModelWrapper : public QObject {
     QString getDestPath();
     QString getFileDir();
     QString getFileName();
+    QString getFocus();
     QString getAuthor();
     QString getComment();
     QString getTitle();
@@ -76,6 +77,7 @@ class VymModelWrapper : public QObject {
     bool selectUids(QJSValueList args);
     bool selectLatestAdded();
     void setDefaultLinkColor(const QString &color); // FIXME-3-4 maybe also rename other setMap* methods?
+    void setFocus();
     void setAnimCurve(int n);
     void setAnimDuration(int n);
     void setAuthor(const QString &s);
@@ -96,6 +98,7 @@ class VymModelWrapper : public QObject {
     void undo();
     void unselectAll();
     void unsetBackgroundImage();
+    void unsetFocus();
 
   private:
     VymModel *modelInt;

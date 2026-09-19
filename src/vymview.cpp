@@ -107,6 +107,11 @@ VymView::VymView(VymModel *m)
 
     connect(model, SIGNAL(updateLayout()), mapEditor, SLOT(autoLayout()));
 
+    // Show or hide the focus mode overlay in the map editor
+    connect(model, SIGNAL(focusChanged()), mapEditor,
+            SLOT(updateFocusIndicator()));
+    mapEditor->updateFocusIndicator();
+
     mapEditor->setAntiAlias(mainWindow->isAliased());
     mapEditor->setSmoothPixmap(mainWindow->hasSmoothPixmapTransform());
 }

@@ -720,6 +720,10 @@ void Main::setupAPI()
     c = new Command("getSelectionString", Command::TreeItemSel, Command::StringPar);
     modelCommands.append(c);
 
+    c = new Command("getFocus", Command::AnySel, Command::StringPar);
+    c->setComment("Returns heading of focused branch, or empty string if focus mode is off");
+    modelCommands.append(c);
+
     c = new Command("getZoom", Command::AnySel, Command::DoublePar);
     modelCommands.append(c);
 
@@ -860,6 +864,11 @@ void Main::setupAPI()
     c->addParameter(Command::ColorPar, false, "Default color of links");
     modelCommands.append(c);
 
+    c = new Command("setFocus", Command::BranchSel);
+    c->setComment(
+        "Focus selected branch: Only it, its children and its ancestors are shown");
+    modelCommands.append(c);
+
     c = new Command("setLinkColorHint", Command::AnySel);
     c->addParameter(Command::StringPar, false, "Name of color hint to use");
     c->setComment("Use 'DefaultColor' for links or 'HeadingColor'");
@@ -872,6 +881,10 @@ void Main::setupAPI()
 
     c = new Command("setRotationView", Command::AnySel);
     c->addParameter(Command::DoublePar, false, "Rotation of view of map");
+    modelCommands.append(c);
+
+    c = new Command("unsetFocus", Command::AnySel);
+    c->setComment("Leave focus mode, show all branches again");
     modelCommands.append(c);
 
     c = new Command("setSelectionBrushColor", Command::AnySel);
@@ -2120,6 +2133,16 @@ void Main::setupEditActions()
     actionListBranches.append(a);
     actionUnscrollSubtree = a;
 
+    a = new QAction(QPixmap(":/view-filter.png"), tr("Focus branch", "Edit menu"), this);
+    a->setStatusTip(tr("Hide all branches, except the selected one and its children", "Edit menu"));
+    switchboard.addAction(a, "mapToggleFocus", Qt::SHIFT | Qt::Key_F, shortcutScope, sortDisplayTag);
+    connect(a, SIGNAL(triggered()), this, SLOT(editToggleFocus()));
+    actionListBranches.append(a);
+    a->setEnabled(false);
+    a->setCheckable(true);
+    addAction(a);
+    actionToggleFocus = a;
+
     QString geometryTag = tr("Geometry of items", "MainWindow shortcut groups");
     a = new QAction(tr("Grow selection", "Edit menu"), this);
     switchboard.addAction(a, "mapGrowSelection", Qt::CTRL | Qt::Key_Plus, shortcutScope, geometryTag);
@@ -2520,6 +2543,7 @@ void Main::setupEditMenu()
 
     editMenu->addAction(actionToggleScroll);
     editMenu->addAction(actionUnscrollSubtree);
+    editMenu->addAction(actionToggleFocus);
 
 }
 
@@ -4048,6 +4072,7 @@ void Main::setupToolbars()
     editActionsToolbar->addAction(actionSortChildren);
     editActionsToolbar->addAction(actionSortBackChildren);
     editActionsToolbar->addAction(actionToggleScroll);
+    editActionsToolbar->addAction(actionToggleFocus);
     editActionsToolbar->addAction(actionToggleHideExport);
     editActionsToolbar->addAction(actionToggleTask);
     editActionsToolbar->addAction(actionToggleTarget);
@@ -5811,6 +5836,13 @@ void Main::editToggleScroll()
         m->toggleScroll();
 }
 
+void Main::editToggleFocus()
+{
+    VymModel *m = currentModel();
+    if (m)
+        m->toggleFocus();
+}
+
 void Main::editExpandAll()
 {
     VymModel *m = currentModel();
@@ -7398,6 +7430,12 @@ void Main::updateActions()
                 else
                     actionToggleScroll->setChecked(false);
 
+                // Enable focus action also, if no branch is selected,
+                // to be able to leave focus mode in any case
+                actionToggleFocus->setEnabled(
+                    selbi != nullptr || m->getFocusBranch() != nullptr);
+                actionToggleFocus->setChecked(m->getFocusBranch() != nullptr);
+
                 QString url;
                 if (selti) url = selti->url();
                 if (url.isEmpty()) {
@@ -7529,6 +7567,9 @@ void Main::updateActions()
 
         foreach (QAction *a, unrestrictedMapActions)
             a->setEnabled(false);
+
+        actionToggleFocus->setEnabled(false);
+        actionToggleFocus->setChecked(false);
 
         // Disable toolbars
         standardFlagsMaster->setEnabled(false);

@@ -572,6 +572,40 @@ class VymModel : public TreeModel {
     bool unscrollBranch(BranchItem *);
     void toggleScroll(BranchItem *bi = nullptr);
     void unscrollSubtree(BranchItem *bi = nullptr);
+
+    /*! \brief Hide all branches, which are not part of the subtree of \a bi
+
+        Focus mode is a temporary view mode, it does not change the data of
+        the map. Set \a bi to nullptr to leave focus mode and show all
+        branches again. The focused branch is remembered by its UUID, so that
+        replacing or deleting parts of the map cannot leave a dangling
+        pointer behind. */
+    void setFocusBranch(BranchItem *bi = nullptr);
+
+    /*! \brief Enter focus mode for the selected branch, leave it again or move
+        the focus to the selected branch, depending on the current state.
+        Works also without a selection, which leaves focus mode. */
+    void toggleFocus();
+
+    /*! Return branch focused in focus mode, or nullptr, if focus mode is off */
+    BranchItem *getFocusBranch();
+
+    /*! Re-apply focus mode after the structure of the map changed, e.g. after
+        relinking branches, inserting new ones or undo/redo. Leaves focus mode,
+        if the focused branch does no longer exist. */
+    void updateFocus();
+
+  private:
+    QUuid focusBranchUuidInt; //!< UUID of branch focused in focus mode
+    QUuid exportFocusUuidInt; //!< Focus mode saved while exporting
+
+    void applyFocusMode(); //!< Update visibility of all branches
+
+    /*! Leave focus mode, if \a ti is the focused branch or contains it.
+        Called before deleting items to avoid a dangling pointer. */
+    void checkFocusOnDelete(TreeItem *ti);
+
+  public:
     void emitExpandAll();
     void emitExpandOneLevel();
     void emitCollapseOneLevel();
@@ -581,6 +615,7 @@ class VymModel : public TreeModel {
     void expandOneLevel();
     void collapseOneLevel();
     void collapseUnselected();
+    void focusChanged(); //!< Focus mode was entered, left or moved
 
   public:
     void toggleTarget(BranchItem *bi = nullptr);

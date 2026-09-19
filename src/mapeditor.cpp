@@ -2,12 +2,15 @@
 
 #include <QApplication>
 #include <QGraphicsProxyWidget>
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QObject>
 #include <QPrintDialog>
 #include <QPrinter>
 #include <QScrollBar>
+#include <QToolButton>
 
 #include "animpoint.h"
 #include "branchitem.h"
@@ -103,6 +106,30 @@ MapEditor::MapEditor(VymModel *vm)
     selectionMode = AutoSelection;
 
     setStyleSheet("QGraphicsView:focus {" + editorFocusInStyle + "}");
+
+    // Overlay in the upper left corner shown while focus mode is active.
+    // It is a child widget of the viewport (not part of the scene), so it
+    // never shows up in exports or prints.
+    focusIndicator = new QWidget(viewport());
+    focusIndicator->setObjectName("focusIndicator");
+    QHBoxLayout *focusIndicatorLayout = new QHBoxLayout(focusIndicator);
+    focusIndicatorLayout->setContentsMargins(8, 4, 4, 4);
+    focusIndicatorLayout->setSpacing(6);
+    focusIndicatorLabel = new QLabel(focusIndicator);
+    QToolButton *focusIndicatorClose = new QToolButton(focusIndicator);
+    focusIndicatorClose->setText(QString(QChar(0x2715))); // ✕
+    focusIndicatorClose->setToolTip(tr("Leave focus mode"));
+    focusIndicatorClose->setAutoRaise(true);
+    focusIndicatorClose->setCursor(Qt::PointingHandCursor);
+    focusIndicatorLayout->addWidget(focusIndicatorLabel);
+    focusIndicatorLayout->addWidget(focusIndicatorClose);
+    focusIndicator->setStyleSheet(
+        "QWidget#focusIndicator { background-color: palette(window);"
+        " border: 1px solid palette(mid); border-radius: 6px; }"
+        "QWidget#focusIndicator QLabel { color: palette(window-text); }");
+    focusIndicator->hide();
+    connect(focusIndicatorClose, SIGNAL(clicked()), this,
+            SLOT(leaveFocusMode()));
 
     // Create bitmap cursors, platform dependant
     HandOpenCursor = QCursor(QPixmap(":/mode-move-view.png"), 1, 1);
@@ -2722,7 +2749,38 @@ void MapEditor::focusOutEvent(QFocusEvent *e)
         editHeadingFinished();
 }
 
-void MapEditor::resizeEvent(QResizeEvent *e) { QGraphicsView::resizeEvent(e); }
+void MapEditor::resizeEvent(QResizeEvent *e)
+{
+    QGraphicsView::resizeEvent(e);
+
+    // Keep the focus mode overlay in the upper left corner
+    if (focusIndicator)
+        focusIndicator->move(10, 10);
+}
+
+void MapEditor::updateFocusIndicator()
+{
+    BranchItem *bi = model->getFocusBranch();
+
+    if (!bi) {
+        focusIndicator->hide();
+        return;
+    }
+
+    QString heading = bi->headingPlain().simplified();
+    if (heading.length() > 60)
+        heading = heading.left(60) + QChar(0x2026); // …
+
+    focusIndicatorLabel->setText(
+        tr("Focus: \"%1\"", "Overlay in MapEditor while focus mode is active")
+            .arg(heading));
+    focusIndicator->adjustSize();
+    focusIndicator->move(10, 10);
+    focusIndicator->show();
+    focusIndicator->raise();
+}
+
+void MapEditor::leaveFocusMode() { model->setFocusBranch(nullptr); }
 
 void MapEditor::dragEnterEvent(QDragEnterEvent *event)
 {
@@ -2964,6 +3022,10 @@ void MapEditor::updateData(const QModelIndex &sel)
         }
         winter->setObstacles(obstacles);
     }
+
+    // Keep the focus mode overlay up to date, if the focused branch is edited
+    if (focusIndicator && focusIndicator->isVisible() && ti == model->getFocusBranch())
+        updateFocusIndicator();
 }
 
 void MapEditor::togglePresentationMode()

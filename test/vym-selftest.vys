@@ -13,6 +13,7 @@ all_tests = [
   "delete_parts",
   "export",         // FIXME WIP
   "extrainfo",
+  "focus",
   "frames",
   "history",
   "layouts",
@@ -1808,6 +1809,50 @@ function test_xlinks()
 ///////////////////////////////////////////////////////////////
 
 
+function test_focus()
+{
+  heading("Focus mode:");
+  map = initMap(testMapDefault);
+
+  branch_0Aa1_string = branch_0Aa_string + ",bo:0";
+
+  expect("No focus initially", map.getFocus(), "");
+
+  // Focus a branch deep in the map: Only it, its children and its
+  // ancestors are shown, all other branches are hidden
+  map.select(branch_0Aa1_string);
+  map.setFocus();
+  expect("Focus on deep branch", map.getFocus(), "branch a1");
+
+  // The focus follows the selection
+  map.select(branch_0Ab_string);
+  expect("Focus follows selection", map.getFocus(), "branch b");
+
+  // MapCenters are branches, too: Their whole subtree is shown
+  map.select(center_1_string);
+  expect("Focus follows selection to MapCenter", map.getFocus(), "MapCenter 1");
+
+  // Leave focus mode
+  map.unsetFocus();
+  expect("Focus mode off", map.getFocus(), "");
+
+  // Removing the focused branch ends focus mode (and must not crash)
+  map.select(branch_0Ab_string);
+  map.setFocus();
+  expect("Focus on branch to be removed", map.getFocus(), "branch b");
+  map.remove();
+  expect("Focus mode off, if focused branch was removed", map.getFocus(), "");
+
+  // After undo, focus mode can be entered again
+  map.undo();
+  map.select(branch_0Ab_string);
+  map.setFocus();
+  expect("Focus mode can be entered again after undo", map.getFocus(), "branch b");
+  map.unsetFocus();
+
+  closeCurrentMap();
+}
+
 if (tests.includes("basics")) { test_basics(); }
 if (tests.includes("adding_branches")) { test_adding_branches(); }
 if (tests.includes("adding_maps"))    { test_adding_maps(); }
@@ -1816,6 +1861,7 @@ if (tests.includes("copy_paste"))     { test_copy_paste(); }
 if (tests.includes("delete_parts"))   { test_delete_parts(); }
 if (tests.includes("export"))         { test_export(); }
 if (tests.includes("extrainfo"))      { test_extrainfo(); }
+if (tests.includes("focus"))          { test_focus(); }
 if (tests.includes("frames"))         { test_frames(); }
 if (tests.includes("history"))        { test_history(); }
 if (tests.includes("layouts"))        { test_layouts(); }
